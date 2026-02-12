@@ -1,3 +1,5 @@
+import de.infolektuell.gradle.jpackage.tasks.JlinkTask
+
 plugins {
     application
     id("de.infolektuell.jmod")
@@ -27,4 +29,9 @@ application {
     mainModule = "de.infolektuell.bass.app"
     mainClass = "de.infolektuell.bass.app.Main"
     applicationDefaultJvmArgs = listOf("--enable-native-access=de.infolektuell.bass.main")
+}
+
+jpackage.common.isCommandLineApplication = true
+tasks.named("generateRuntimeImage", JlinkTask::class) {
+    modulePath.setFrom(tasks.named("createJmod"), jmodFile, configurations["linkPath"])
 }
