@@ -33,5 +33,5 @@ application {
 
 jpackage.common.isCommandLineApplication = true
 tasks.named("generateRuntimeImage", JlinkTask::class) {
-    modulePath.setFrom(tasks.named("createJmod"), jmodFile, configurations["linkPath"])
+    modulePath.setFrom(tasks.named("createJmod"), configurations["linkPath"])
 }
