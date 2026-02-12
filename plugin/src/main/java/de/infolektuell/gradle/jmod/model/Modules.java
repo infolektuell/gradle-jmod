@@ -1,0 +1,99 @@
+package de.infolektuell.gradle.jmod.model;
+
+import java.io.File;
+import java.lang.module.ModuleDescriptor;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+public class Modules {
+    public static String sourceFileModuleName(File file) {
+        final Path filePath = file.toPath();
+        if (!Files.exists(filePath) || Files.isDirectory(filePath) || !file.getName().equals("module-info.java")) return null;
+        try {
+            final List<String> lines = Files.readAllLines(filePath);
+            final Optional<String> moduleLine = lines.stream()
+                .map(String::trim)
+                .filter(l -> l.startsWith("module "))
+                .findFirst();
+            if (moduleLine.isEmpty()) return null;
+            final Pattern modulePattern = Pattern.compile("^module ([a-z.]+)\\s*[{]$");
+            final Matcher matcher = modulePattern.matcher(moduleLine.get());
+            if (matcher.find()) return matcher.group(1);
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    public static String moduleName(File file) {
+        String moduleName = fileModuleName(file);
+        if (Objects.isNull(moduleName)) moduleName = directoryModuleName(file);
+        if (Objects.isNull(moduleName)) moduleName = archiveModuleName(file);
+        return moduleName;
+    }
+
+    public static boolean isModule(File file) {
+        if (file.isFile()) {
+            if (file.getName().endsWith(".jmod")) return true;
+            return isJarModule(file);
+        } else {
+            return Files.exists(file.toPath().resolve("module-info.class")) || Files.exists(file.toPath().resolve("module-info.java"));
+        }
+    }
+
+    private static boolean isJarModule(File file) {
+        if (!file.isFile() || !file.exists() || !file.getName().endsWith(".jar")) return false;
+        try (ZipFile zip = new ZipFile(file)) {
+            return zip.stream().anyMatch(e -> e.getName().endsWith("module-info.class"));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static String directoryModuleName(File file) {
+        if (!file.isDirectory()) return null;
+        final Path modulePath = file.toPath().resolve("module-info.class");
+        if (Files.isDirectory(modulePath) || !Files.exists(modulePath)) return null;
+        try (var in = Files.newInputStream(modulePath)) {
+            final ModuleDescriptor module = ModuleDescriptor.read(in);
+            return module.name();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String fileModuleName(File file) {
+        if (!file.isFile() || !file.getName().equals("module-info.class")) return null;
+        final var modulePath = file.toPath();
+        try (var in = Files.newInputStream(modulePath)) {
+            final var module = ModuleDescriptor.read(in);
+            return module.name();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String archiveModuleName(File file) {
+        if (!file.isFile()) return null;
+        if (!(file.getName().endsWith(".jar") || file.getName().endsWith(".jmod"))) return null;
+        try (ZipFile zip = new ZipFile(file)) {
+            final Optional<? extends ZipEntry> info = zip.stream().filter(e -> e.getName().endsWith("module-info.class")).findFirst();
+            if (info.isPresent()) {
+                try (var in = zip.getInputStream(info.get())) {
+                    final var module = ModuleDescriptor.read(in);
+                    return module.name();
+                }
+            }
+            return null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+}
